@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Assistant · Python chapters</title>
+    <meta name="description" content="Ask questions and get answers grounded in your own Python PDF chapters.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <script>
+        // Apply the saved theme before first paint to avoid a flash.
+        try {
+            const saved = localStorage.getItem("theme");
+            const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            document.documentElement.dataset.theme = saved || (dark ? "dark" : "light");
+        } catch (e) {}
+    </script>
+</head>
+<body>
+<div class="app" id="app">
+
+    <!-- ───────── Sidebar: the pipeline ───────── -->
+    <aside class="rail" id="rail" aria-label="Knowledge base setup">
+        <div class="rail-head">
+            <a class="brand" href="/" aria-label="Study Assistant home">
+                <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+                    <rect width="40" height="40" rx="11" fill="currentColor"/>
+                    <path d="M12 11h11a5 5 0 0 1 0 10H17" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M28 29H17a5 5 0 0 1 0-10h6" fill="none" stroke="#FFD43B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>
+                    <strong>Study Assistant</strong>
+                    <small>Answers from your Python chapters</small>
+                </span>
+            </a>
+            <button class="icon-btn only-mobile" id="closeRail" aria-label="Close setup panel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+        </div>
+
+        <ol class="flow">
+
+            <li class="step" id="stepUpload" data-state="active">
+                <span class="marker" aria-hidden="true"><i>1</i></span>
+                <div class="step-body">
+                    <h2>Add your chapters</h2>
+                    <p class="step-note">Choose exactly five PDF files.</p>
+
+                    <label class="drop" id="dropzone" for="pdfInput">
+                        <input id="pdfInput" type="file" accept=".pdf,application/pdf" multiple>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
+                        <span><b>Drop PDFs here</b> or browse</span>
+                        <em id="dropCount">0 of 5 selected</em>
+                    </label>
+
+                    <ul id="fileList" class="files" aria-live="polite"></ul>
+
+                    <button id="uploadBtn" class="btn ghost" disabled>Upload PDFs</button>
+                </div>
+            </li>
+
+            <li class="step" id="stepIndex" data-state="locked">
+                <span class="marker" aria-hidden="true"><i>2</i></span>
+                <div class="step-body">
+                    <h2>Build the knowledge base</h2>
+                    <p class="step-note">Reads each page and makes it searchable.</p>
+
+                    <ul class="stages" id="stages">
+                        <li data-stage="extract"><span class="dot"></span><span>Read pages</span><em id="extractStatus">Waiting</em></li>
+                        <li data-stage="chunk"><span class="dot"></span><span>Split into passages</span><em id="chunkStatus">Waiting</em></li>
+                        <li data-stage="embed"><span class="dot"></span><span>Create embeddings</span><em id="embedStatus">Waiting</em></li>
+                        <li data-stage="store"><span class="dot"></span><span>Save to ChromaDB</span><em id="dbStatus">Waiting</em></li>
+                    </ul>
+
+                    <button id="indexBtn" class="btn solid" disabled>Build knowledge base</button>
+                </div>
+            </li>
+
+            <li class="step" id="stepAsk" data-state="locked">
+                <span class="marker" aria-hidden="true"><i>3</i></span>
+                <div class="step-body">
+                    <h2>Ask questions</h2>
+                    <p class="step-note" id="askNote">Unlocks once the knowledge base is built.</p>
+                </div>
+            </li>
+        </ol>
+
+        <dl class="ledger">
+            <div><dt>Passages indexed</dt><dd id="chunkCount">0</dd></div>
+            <div><dt>Collection</dt><dd id="collectionName">–</dd></div>
+        </dl>
+    </aside>
+
+    <div class="scrim" id="scrim" hidden></div>
+
+    <!-- ───────── Main: the conversation ───────── -->
+    <main class="stage">
+        <header class="stage-bar">
+            <button class="icon-btn only-mobile" id="openRail" aria-label="Open setup panel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+            </button>
+
+            <div class="status" id="statusChip" data-state="idle">
+                <span class="pulse" aria-hidden="true"></span>
+                <span id="statusText">Not ready</span>
+            </div>
+
+            <div class="bar-actions">
+                <button class="icon-btn" id="clearChat" aria-label="Clear conversation" title="Clear conversation" hidden>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>
+                </button>
+                <button class="icon-btn" id="themeToggle" aria-label="Switch theme" title="Switch theme">
+                    <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+                    <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="thread" id="thread" role="log" aria-live="polite" aria-label="Conversation">
+            <section class="welcome" id="welcome">
+                <h1>What do you want to review?</h1>
+                <p>Ask in your own words. Every answer comes from your chapters, with the pages it was taken from.</p>
+
+                <ul class="starters" id="starters">
+                    <li><button type="button">What are Python variables?</button></li>
+                    <li><button type="button">Explain how a for loop works</button></li>
+                    <li><button type="button">How do I define and call a function?</button></li>
+                    <li><button type="button">When should I use if, elif and else?</button></li>
+                </ul>
+            </section>
+        </div>
+
+        <form class="composer" id="composer" autocomplete="off">
+            <div class="composer-box">
+                <textarea id="question" rows="1" placeholder="Build the knowledge base first" aria-label="Your question" disabled></textarea>
+                <button id="askBtn" class="send" type="submit" aria-label="Send question" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </button>
+            </div>
+            <p id="queryHint">Enter to send · Shift+Enter for a new line</p>
+        </form>
+    </main>
+
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
