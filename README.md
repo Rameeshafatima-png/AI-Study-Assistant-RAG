@@ -1,220 +1,304 @@
-# AI Study Assistant using RAG
+<div align="center">
 
-A FastAPI-based AI Study Assistant that answers questions from five Python programming PDF chapters using Retrieval-Augmented Generation (RAG).
+# Study Assistant
 
-The project extracts PDF text, splits it into chunks, creates local sentence embeddings, stores those vectors in ChromaDB, retrieves the most relevant chunks for a question, and sends the retrieved context to Groq for the final answer.
+**Ask questions about your Python chapters and get answers grounded in your own PDFs, with the exact pages they came from.**
 
-## Assignment Requirements Covered
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-vector%20store-FF6446)
+![Groq](https://img.shields.io/badge/Groq-LLM-F55036)
+![Embeddings](https://img.shields.io/badge/Embeddings-all--MiniLM--L6--v2-4338FF)
 
-- Upload 5 PDF files
-- Extract text from all PDFs
-- Split text into chunks
-- Generate embeddings for all chunks
-- Save embeddings locally using ChromaDB
-- Ask questions through a FastAPI web interface
-- Retrieve relevant chunks using RAG
-- Send retrieved context to Groq
-- Display the final AI-generated answer
-- Show retrieved source files and pages
+<br>
 
-## Technology Stack
+<img src="docs/preview-light.png" alt="Study Assistant answering a question about Python variables, with source cards showing chapter, page and match score" width="860">
 
-- Python
-- FastAPI
-- Jinja2
-- PyMuPDF
-- Sentence Transformers
-- ChromaDB
-- Groq API
-- HTML
-- CSS
-- JavaScript
+</div>
 
-## Project Structure
+<br>
 
-```text
-AI_Study_Assistant_RAG/
-│
-├── app/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── groq_service.py
-│   ├── main.py
-│   ├── pdf_processor.py
-│   ├── rag_service.py
-│   └── vector_store.py
-│
-├── data/
-│   ├── pdfs/
-│   │   ├── chapter_01_introduction.pdf
-│   │   ├── chapter_02_variables_data_types.pdf
-│   │   ├── chapter_03_conditionals.pdf
-│   │   ├── chapter_04_loops.pdf
-│   │   └── chapter_05_functions.pdf
-│   └── uploads/
-│
-├── chroma_db/
-├── static/
-│   ├── app.js
-│   └── style.css
-│
-├── templates/
-│   └── index.html
-│
-├── .env.example
-├── .gitignore
-├── ingest.py
-├── requirements.txt
-└── README.md
+## What it does
+
+Study Assistant is a Retrieval-Augmented Generation (RAG) app. You give it five PDF chapters. It reads them, turns every passage into a vector, and stores those vectors locally in ChromaDB. When you ask a question, it finds the most relevant passages and sends **only those** to a Groq-hosted language model, which writes the answer.
+
+Because the model is told to answer from your chapters alone, you get explanations that match your course material. Every answer lists the chapters and pages it was taken from, so you can check it.
+
+## Features
+
+| | |
+|---|---|
+| **Grounded answers** | The model answers only from retrieved passages. If your chapters don't cover the question, it says so instead of guessing. |
+| **Source cards** | Each answer shows the chapter, page and a match score for every passage used. |
+| **Local vector database** | Embeddings are created on your machine and saved in ChromaDB. Only the retrieved passages are sent to Groq. |
+| **Guided setup** | A three-step sidebar walks you through adding chapters, building the knowledge base and asking questions. |
+| **Readable replies** | Answers render with lists, inline code and Python code blocks with a Copy button. |
+| **Light and dark themes** | Follows your system setting and remembers your choice. |
+| **Works on phones** | The setup panel becomes a slide-out drawer on small screens. |
+| **Keyboard friendly** | Enter sends, Shift+Enter adds a new line, visible focus states, and reduced-motion support. |
+
+## Preview
+
+<table>
+<tr>
+<td width="62%"><img src="docs/preview-dark.png" alt="Dark theme"></td>
+<td width="38%"><img src="docs/preview-mobile.png" alt="Mobile layout"></td>
+</tr>
+<tr>
+<td align="center"><sub>Dark theme</sub></td>
+<td align="center"><sub>Mobile layout</sub></td>
+</tr>
+</table>
+
+> The previews use sample answers so the layout can be shown without an API key.
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph Build["Build the knowledge base (once)"]
+        A[5 PDF chapters] --> B[Extract text<br/>PyMuPDF]
+        B --> C[Split into<br/>overlapping chunks]
+        C --> D[Create embeddings<br/>all-MiniLM-L6-v2]
+        D --> E[(ChromaDB<br/>local)]
+    end
+
+    subgraph Ask["Ask a question (every time)"]
+        Q[Your question] --> F[Embed the question]
+        F --> G[Similarity search<br/>top 5 passages]
+        E --> G
+        G --> H[Groq LLM<br/>answers from those passages]
+        H --> I[Answer + sources]
+    end
 ```
 
-## 1. Create a Virtual Environment
+1. **Extract.** PyMuPDF reads each PDF page by page, so every passage keeps its file name and page number.
+2. **Chunk.** Text is split into pieces of about 900 characters with a 150-character overlap, so ideas that cross a boundary aren't cut in half.
+3. **Embed.** The `all-MiniLM-L6-v2` sentence-transformer turns each chunk into a vector. This runs locally.
+4. **Store.** Vectors, text and metadata are saved in a persistent ChromaDB collection using cosine distance.
+5. **Retrieve.** Your question is embedded the same way, and the closest passages are returned.
+6. **Generate.** Groq receives the question plus those passages and a strict system prompt, then writes a student-friendly answer.
 
-Windows PowerShell:
+## Quick start
+
+You need **Python 3.10 or newer** and a free [Groq API key](https://console.groq.com/keys).
+
+### 1. Get the project
+
+```bash
+cd AI_Study_Assistant_RAG
+```
+
+### 2. Create a virtual environment
+
+macOS / Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Windows (PowerShell):
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\activate
 ```
 
-## 2. Install Dependencies
+### 3. Install dependencies
 
-```powershell
+```bash
 pip install -r requirements.txt
 ```
 
-The first embedding run may download the `all-MiniLM-L6-v2` model.
+The first run downloads the embedding model (roughly 90 MB), so it can take a minute.
 
-## 3. Configure Groq
+### 4. Add your API key
 
-Create a `.env` file from `.env.example`:
+macOS / Linux:
+
+```bash
+cp .env.example .env
+```
+
+Windows (PowerShell):
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Then open `.env` and add your Groq API key:
+Open `.env` and replace `your_groq_api_key_here` with your key. Never commit this file. It is already listed in `.gitignore`.
 
-```env
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=openai/gpt-oss-120b
-EMBEDDING_MODEL=all-MiniLM-L6-v2
-CHUNK_SIZE=900
-CHUNK_OVERLAP=150
-TOP_K=5
-```
+### 5. Run it
 
-Do not commit `.env` to GitHub.
-
-## 4. Run the Application
-
-```powershell
+```bash
 uvicorn app.main:app --reload
 ```
 
-Open:
+Open **http://127.0.0.1:8000**.
 
-```text
-http://127.0.0.1:8000
-```
+## Using the app
 
-## 5. Use the Web Interface
+1. **Add your chapters.** Drop exactly five PDFs on the sidebar (or click to browse), then choose **Upload PDFs**. You can add files in batches and remove any with the ✕.
+2. **Build the knowledge base.** Choose **Build knowledge base**. The four stages show their results when the build finishes: pages read, passages created, embeddings made, database saved.
+3. **Ask questions.** Type your own, or pick a starter. Try:
+   - *What are Python variables?*
+   - *Explain how a for loop works.*
+   - *How do I define and call a function?*
+   - *When should I use if, elif and else?*
 
-### Step 1 — Upload PDFs
+Uploading a new set of PDFs replaces the previous set, and building the knowledge base replaces the previous index.
 
-Select exactly five PDF chapters.
+### Try it without uploading
 
-### Step 2 — Build Knowledge Base
+The project ships with five sample chapters in `data/pdfs/`. Index them from the command line:
 
-The application will:
-
-1. Extract text with PyMuPDF
-2. Split the text into overlapping chunks
-3. Generate sentence embeddings
-4. Store the embeddings and metadata in ChromaDB
-
-### Step 3 — Ask Questions
-
-Try:
-
-- What are Python variables?
-- Explain the difference between a list and a tuple.
-- What is a for loop?
-- How do functions work in Python?
-- What are conditional statements?
-
-The application retrieves relevant chunks and sends only those chunks to Groq.
-
-## Optional CLI Indexing
-
-The included sample PDFs can also be indexed without using the upload UI:
-
-```powershell
+```bash
 python ingest.py
 ```
 
-Then start FastAPI and ask questions from the browser.
+Then start the server. The app detects the existing index and opens ready to answer questions.
 
-## RAG Flow
+## Configuration
 
-```text
-5 Python PDFs
-      |
-      v
-Text Extraction
-      |
-      v
-Text Chunking
-      |
-      v
-Sentence Embeddings
-      |
-      v
-Local ChromaDB
-      |
-      |  User Question
-      v
-Query Embedding
-      |
-      v
-Similarity Search
-      |
-      v
-Top-K Relevant Chunks
-      |
-      v
-Groq LLM
-      |
-      v
-Final Study Answer
+All settings live in `.env`. Only `GROQ_API_KEY` is required.
+
+| Variable | Default | What it controls |
+|---|---|---|
+| `GROQ_API_KEY` | none | Your Groq key. Without it, questions fail with a clear error in the chat. |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | The Groq model that writes answers. |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | The sentence-transformer used for embeddings. |
+| `CHUNK_SIZE` | `900` | Characters per chunk. |
+| `CHUNK_OVERLAP` | `150` | Characters shared between neighbouring chunks. |
+| `TOP_K` | `5` | Default number of passages retrieved per question. |
+
+If you change `EMBEDDING_MODEL`, `CHUNK_SIZE` or `CHUNK_OVERLAP`, rebuild the knowledge base so the stored vectors match.
+
+### Tuning tips
+
+- **Answers feel vague or off-topic:** lower `CHUNK_SIZE` (try `600`) so each passage is more focused.
+- **Answers miss context:** raise `CHUNK_OVERLAP` or `TOP_K`.
+- **Chapters are long and dense:** raise `CHUNK_SIZE` (try `1200`) and keep a healthy overlap.
+
+## API reference
+
+The web page uses a small JSON API, which you can also call directly. Interactive docs are at **http://127.0.0.1:8000/docs**.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/` | The web interface. |
+| `GET` | `/api/health` | Service status and index statistics. |
+| `GET` | `/api/stats` | Chunk count, collection name, embedding model, database path. |
+| `POST` | `/api/upload` | Upload PDFs as multipart form field `files`. Replaces earlier uploads. |
+| `POST` | `/api/index` | Build the knowledge base from the uploaded PDFs. Requires exactly five. |
+| `POST` | `/api/query` | Ask a question. |
+
+Example query:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is a for loop?", "top_k": 5}'
 ```
 
-## Notes
+Response:
 
-The included PDFs are original sample Python study notes created for testing the assignment workflow. They can be replaced with other educational Python PDFs.
+```json
+{
+  "answer": "A for loop repeats a block of code once for each item in a sequence...",
+  "sources": [
+    { "source": "chapter_04_loops.pdf", "page": 1, "distance": 0.3124 }
+  ]
+}
+```
 
-For scanned/image-only PDFs, OCR is not included in this version. The PDF should contain selectable text for PyMuPDF extraction to work correctly.
+`distance` is cosine distance, so lower means a closer match. The interface shows it as a percentage (`1 - distance`). `top_k` is limited to values from 1 to 10.
 
-## Screenshots for Submission
+## Project structure
 
-Capture these screens for the assignment:
+```text
+AI_Study_Assistant_RAG/
+├── app/
+│   ├── main.py            FastAPI routes and static file serving
+│   ├── rag_service.py     Ties extraction, chunking, search and answering together
+│   ├── pdf_processor.py   PyMuPDF page extraction and overlapping chunker
+│   ├── vector_store.py    ChromaDB collection and sentence-transformer embeddings
+│   ├── groq_service.py    Prompt construction and the Groq chat call
+│   └── config.py          Paths and environment settings
+├── templates/
+│   └── index.html         Page structure
+├── static/
+│   ├── style.css          Design tokens, layout, themes, responsive rules
+│   └── app.js             Upload flow, build progress, chat, answer rendering
+├── data/
+│   ├── pdfs/              Five sample chapters for ingest.py
+│   └── uploads/           PDFs uploaded through the interface
+├── chroma_db/             Local vector database (created automatically)
+├── docs/                  README images
+├── ingest.py              Index the sample PDFs from the command line
+├── requirements.txt
+└── .env.example
+```
 
-1. Five PDF files selected/uploaded
-2. Embedding creation / knowledge-base completion
-3. ChromaDB indexed chunk count
-4. At least three different AI question/answer results
-5. The deployed application
+## Tech stack
 
-## GitHub
+| Layer | Tools |
+|---|---|
+| Backend | FastAPI, Uvicorn, Jinja2 |
+| PDF parsing | PyMuPDF |
+| Embeddings | Sentence Transformers (`all-MiniLM-L6-v2`) |
+| Vector database | ChromaDB (persistent, cosine similarity) |
+| Language model | Groq API |
+| Frontend | Plain HTML, CSS and JavaScript with no build step |
 
-Before pushing, verify that `.env` and `chroma_db/` are ignored.
+## Troubleshooting
 
-```powershell
+**"GROQ_API_KEY is missing"** appears in the chat.
+Add your key to `.env` and restart the server.
+
+**"Please upload exactly 5 PDF files"**
+The knowledge base is built from five files. Remove or add files until the sidebar shows 5 of 5, then upload again.
+
+**The build seems stuck on the first run.**
+The embedding model is downloading. Check your internet connection and wait a minute.
+
+**Answers say "I could not find enough information in the uploaded chapters."**
+Your question isn't covered by the indexed text. Rephrase it, or check that your PDFs contain selectable text.
+
+**A PDF produces zero passages.**
+It is probably a scan made of images. OCR isn't included, so use a PDF with real, selectable text.
+
+**The page looks unstyled.**
+Open the app through `uvicorn` at `http://127.0.0.1:8000` rather than opening `index.html` as a file, because the styles and script are served from `/static`.
+
+## Limitations
+
+- OCR for scanned PDFs isn't included.
+- The interface expects exactly five PDFs (the sample set is five chapters).
+- Each question is answered independently, with no memory of earlier questions in the same chat.
+- Answers appear when they are fully generated. They don't stream word by word.
+
+## Ideas for next steps
+
+- Stream answers as they are written
+- Show the retrieved passage text inside each source card
+- Follow-up questions that remember the conversation
+- OCR for scanned chapters
+- Support any number of PDFs and other file types
+
+## Publishing to GitHub
+
+Check that `.env` and `chroma_db/` are ignored, then:
+
+```bash
 git init
 git add .
-git commit -m "Build AI Study Assistant using RAG"
+git commit -m "Study Assistant: RAG over Python chapters"
 git branch -M main
 git remote add origin YOUR_GITHUB_REPOSITORY_URL
 git push -u origin main
 ```
-#
+
+## Sample content
+
+The PDFs in `data/pdfs/` are original sample Python notes made for testing. Replace them with any educational Python PDFs you like.
