@@ -12,7 +12,7 @@
 
 <br>
 
-<img src="docs/preview-light.png" alt="Study Assistant answering a question about Python variables, with source cards showing chapter, page and match score" width="860">
+
 
 </div>
 
